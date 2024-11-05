@@ -6,6 +6,8 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
+#include "common.h"
+
 //
 //                  --- [tap0] -- [nic0]
 //                 /
@@ -55,8 +57,8 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
 		void *data = (void *)(long)skb->data;
 		void *data_end = (void *)(long)skb->data_end;
 
-    struct ethhdr header_data;
-    if (bpf_skb_load_bytes(skb, 0, &header_data, sizeof(header_data)) < 0) {
+    struct custom_header header_data;
+    if (bpf_skb_load_bytes(skb, 0, &header_data, sizeof(header_data.eth)) < 0) {
         // load the ethernet header
         return TC_ACT_SHOT;
     }
@@ -65,6 +67,8 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
     if (bpf_skb_adjust_room(skb, 4, BPF_ADJ_ROOM_MAC, 0) < 0) {
         return TC_ACT_OK;
     }
+
+    // PAYLOAD IS ADJUSTED, REFETCH DATA
 
 		// Access packet data
 		data = (void *)(long)skb->data;
@@ -77,14 +81,12 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
         return TC_ACT_SHOT;  // Drop if packet is too short
     }
 
-    if (bpf_skb_store_bytes(skb, 0, &header_data, sizeof(header_data), 0) < 0) {
-        // load the ethernet header
-        return TC_ACT_SHOT;
-    }
-    __be16 old_type = header_data.h_proto;
-    header_data.h_proto = bpf_htons(ETH_P_802_EX1); // Change EtherType to custom value
+    header_data.data.sequence = get_sequence_number();
+    header_data.data.protocol = header_data.eth.h_proto;
+    header_data.eth.h_proto = bpf_htons(ETH_P_802_EX1); // Change EtherType to custom value
 
-    // Calculate the offset where the new 4 bytes start (end of original packet)
+    if( header_data.data.sequence == 0)
+        return TC_ACT_SHOT;
 
     // Use bpf_skb_store_bytes to modify the eth_type
     if (bpf_skb_store_bytes(skb, 0, &header_data, sizeof(header_data), BPF_F_RECOMPUTE_CSUM ) < 0){
@@ -92,8 +94,7 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
         return TC_ACT_OK;
     }
 
-
-    bpf_printk("Tagged packet with serial: %d (type: 0x%x -> 0x%x) (size: %d)", *seq_num, old_type, header_data.h_proto, skb->len);
+    bpf_printk("Tagged packet with serial: %d (type: 0x%x -> 0x%x) (size: %d)", header_data.data.sequence, header_data.data.protocol, header_data.eth.h_proto, skb->len);
 
     return TC_ACT_OK;
 }
