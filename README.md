@@ -60,16 +60,17 @@ There are several extremely important constraints imposed on us by the networkin
           (a) packet is tagged
 
                      
-(a) at departure, we simply grow the packet head and add a sequence number + a protocol number (c.f. 1,2)
+(a) at departure, we simply grow the packet head and add a sequence number + a protocol number (c.f. "But why" 1,2)
 
 (b) on reception on the slave interface on the remote host, we immediately want to reconvert the packet back to its original protocl, strip the sequence + protocol data from the head (c.f. 3) and let the subsequent steps deal with the deduplication by *appending* the sequence number to the end of the packet
 
 (c) mark the packet using tc (c.f. 4, 5)
 
-(b) on ingress of *marked* packets only (c.f. 6) to bond master, do deduplication lookup by popping the sequence number from the last 2 bytes of the frame.
+(d) on ingress of *marked* packets only (c.f. 6) to bond master, do deduplication lookup by popping the sequence number from the last 2 bytes of the frame.
 
 
 ### Individual host filter layout
+
 
 
                      --- [tap0] ---- [nic0]
@@ -77,13 +78,35 @@ There are several extremely important constraints imposed on us by the networkin
     user -- [bond0] ---- ...
                   ^ \
                   |  --- [tapN] ---- [nicN]
-                 /       ^    ^ ^
-       egress_filter.o   |    | |
-                        /     |  \
-                mark_all.o    |    ingress_xdp
-                       ingress_filter.o
+                 /       ^      ^
+       egress_filter.o   |      |
+      ingress_filter.o   |  ingress_xdp
+                     mark_all
 
 
+### Modules
+
+#### `egress_filter`
+
+This is a traffic control egress filter (tc egress) which grows the MAC header by 4 bytes and inserts a 16 bit sequence number and the current packet's protocol id into the packet. The packet is transformed into an ETH_P_802_EX1 ethernet packet type.
+
+It only acts on packets which are NOT marked, ensuring that only packets egressing from master (bond0) toward slave (tapN) are mangled.
+
+#### `mark_all`
+
+This is nothing more than `iptables -t mangle -A PREROUTING -i tap0 -j MARK --set-mark 0xCFAE` except that it works. `iptables` for some reason doesn't play well with openvpn tunnels.
+
+#### `ingress_xdp`
+
+This low-level program to unwrap the ETH_P_802_EX1 packet wrappers and restore the original packet payload. It correctly shrinks the MAC head back to its previous location, and appends a sequence number to the end of the skb buffer.
+
+#### `ingress_filter`
+
+This is the final filter that drops duplicates. tc ingress filter have very few priviledges other than pass or drop. At this stage, the packet that comes to us is in its final state.
+
+Because we also get ingress from the user->bond0 direction, this filter ignores packets that are not marked `0xCFAE`.
+
+Here we simply take the last 2 bytes of the skb frame - which thanks to `ingress_xdp` will contain the sequence counter tacked on by the sending party's `egress_filter`, and check against an LRU hash that it hasn't yet been seen. If we've seen it before, it's discarded as being a duplicate.
 
 # A tail of "BUT WHY's?"
 
