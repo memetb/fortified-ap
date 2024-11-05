@@ -4,6 +4,8 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
+#include "common.h"
+
 #include "xdp_data_access_helpers.h"
 
 //
@@ -27,8 +29,6 @@
 // which will then immediately be picked up by the tc ingress filter
 // and turned into meta data
 
-const int offset = 4;
-
 SEC("xdp")
 int xdp_demangle(struct xdp_md *ctx)
 {
@@ -36,13 +36,7 @@ int xdp_demangle(struct xdp_md *ctx)
     void *data = (void *)(long)ctx->data;
     void *data_end = (void *)(long)ctx->data_end;
 
-    struct {
-        struct ethhdr eth;
-        struct {
-        __u16 sequence;
-        __u16 protocol;
-        } data;
-    } header;
+    struct custom_header header;
 
     // Check if the packet has Ethernet header space
     struct ethhdr *eth = data;
@@ -59,10 +53,10 @@ int xdp_demangle(struct xdp_md *ctx)
     // restore original header location
     __builtin_memcpy(data + sizeof(__u32), &header.eth, sizeof(header.eth));
 
-    bpf_printk("got a frame 0x%x %d %d", header.eth.h_proto, header.data.sequence, header.data.protocol);
+    bpf_printk("demangling frame with sequence number %d (protocol: 0x%0X)", header.data.sequence, header.data.protocol);
 
     // truncate the head of the packet
-    if (bpf_xdp_adjust_head(ctx, offset))
+    if (bpf_xdp_adjust_head(ctx, sizeof(header.data)))
         return XDP_ABORTED;
 
     // extend the tail of the packet
