@@ -58,11 +58,12 @@ Unfortunately, many limitations along the way prevent it from being this simple 
 
 There are several important (debilitating) constraints imposed on us by the networking stack:
 
-1. xdp is very powerful but is essentially not at all integrated with the networking stack: in particular, we are not able to mark packets or pass any meta data
-2. if using tc, packets can only be modified at ingress points
-3. resizing of packets isn't straightforward: it is permissible only on ingress, and for some reason, it is easy to grow a packet but isn't possible to shrink it. This makes encapsulation+decapsulation challenging
-4. a packet going from a bond slave to master does not appear as a normal packet and thus, there is no ingress event from when it goes from slave to master. This means that the bonded interface sees exactly what the slave interface saw.
-
+1. `xdp` is very powerful but is essentially not at all integrated with the networking stack: in particular, we are not able to mark packets or pass any meta data
+2. furthermore, `xdp` cannot be attached to virtual interfaces (of which bond is one)
+3. and finally, attaching XDP filters to each slave interface would require that they now share their state across all nics
+4. if using `tc`, packets can only be modified at ingress points (egress modification is not possible by design)
+5. resizing of packets using `tc` isn't straightforward: it is easy to grow a packet but isn't always possible to shrink it. This makes encapsulation+decapsulation challenging
+6. finally, a packet going from a bond slave to master does not appear as a normal packet and thus, there is no ingress event from when it goes from slave to master. This means that the bonded interface sees exactly what the slave interface saw.
 
 ### End to end data flow pictogram (data is flowing from left to right)
 
