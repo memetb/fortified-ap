@@ -79,34 +79,34 @@ There are several extremely important constraints imposed on us by the networkin
                   ^ \
                   |  --- [tapN] ---- [nicN]
                  /       ^      ^
-       egress_filter.o   |      |
-      ingress_filter.o   |  ingress_xdp
-                     mark_all
+            tc_egress    |      |
+           tc_ingress    |  xdp_demangle
+                      tc_mark
 
 
 ### Modules
 
-#### `egress_filter`
+#### `tc_egress`
 
-This is a traffic control egress filter (tc egress) which grows the MAC header by 4 bytes and inserts a 16 bit sequence number and the current packet's protocol id into the packet. The packet is transformed into an ETH_P_802_EX1 ethernet packet type.
+This is a traffic control egress filter (tc egress) which grows the MAC header by 4 bytes and inserts a 16 bit sequence number and the current packet's protocol id into the packet. The packet is transformed into an `ETH_P_802_EX1` ethernet packet type.
 
-It only acts on packets which are NOT marked, ensuring that only packets egressing from master (bond0) toward slave (tapN) are mangled.
+It only acts on packets which are NOT marked, ensuring that only packets egressing from master (`bond0`) toward slave (`tapN`) are mangled.
 
-#### `mark_all`
+#### `tc_mark`
 
 This is nothing more than `iptables -t mangle -A PREROUTING -i tap0 -j MARK --set-mark 0xCFAE` except that it works. `iptables` for some reason doesn't play well with openvpn tunnels.
 
-#### `ingress_xdp`
+#### `xdp_demangle`
 
-This low-level program to unwrap the ETH_P_802_EX1 packet wrappers and restore the original packet payload. It correctly shrinks the MAC head back to its previous location, and appends a sequence number to the end of the skb buffer.
+This is a low-level XDP program to unwrap the `ETH_P_802_EX1` packet header and restore the original packet payload. It correctly shrinks the MAC head back to its previous location, and appends a sequence number to the end of the skb buffer.
 
-#### `ingress_filter`
+#### `tc_ingress`
 
 This is the final filter that drops duplicates. tc ingress filter have very few priviledges other than pass or drop. At this stage, the packet that comes to us is in its final state.
 
-Because we also get ingress from the user->bond0 direction, this filter ignores packets that are not marked `0xCFAE`.
+Because we also get ingress from the `user->bond0` direction, this filter ignores packets that are not marked `0xCFAE`.
 
-Here we simply take the last 2 bytes of the skb frame - which thanks to `ingress_xdp` will contain the sequence counter tacked on by the sending party's `egress_filter`, and check against an LRU hash that it hasn't yet been seen. If we've seen it before, it's discarded as being a duplicate.
+Here we simply take the last 2 bytes of the skb frame - which thanks to `xdp_demangle` will contain the sequence counter tacked on by the sending party's `tc_egress`, and check against an LRU hash that it hasn't yet been seen. If we've seen it before, it's discarded as being a duplicate.
 
 # A tail of "BUT WHY's?"
 
@@ -120,9 +120,9 @@ A: if you don't change the protocol and just tack it on, you are liable to get "
 A: because, believe it or not, while growing the head of a packet is easy, shrinking it is not
 
 4. why are you marking the packet?
-A: we need to be able to identify whether this packet is coming from outside->bond->slave or whether it's going from slave->bond->outside. We do this by marking all packets that touch slave. The mark will not get sent on the wire, so if a packet is marked, it can only mean that it is coming from slave to bond.
+A: we need to be able to identify whether this packet is coming from `outside->bond->slave` or whether it's going from `slave->bond->outside`. We do this by marking all packets that touch slave. The mark will not get sent on the wire, so if a packet is marked, it can only mean that it is coming from slave to bond.
 
-5. but why not just use iptables -j MARK?
+5. but why not just use `iptables -j MARK`?
 A: silly rabbit, that'd be too easy. The answer is you can't.
 
 6. but why only marked?
