@@ -27,6 +27,22 @@ struct {
 		__type(value, __u32);	 // sequence counter
 } seq_num_map SEC(".maps");
 
+static __always_inline __u16 get_sequence_number()
+{
+    // get sequence number
+    __u32 key = 0;
+    __u32* seq_num = bpf_map_lookup_elem(&seq_num_map, &key);
+    if (!seq_num) {
+        return 0;
+    }
+
+    __sync_fetch_and_add(seq_num, 1); // TODO: not thread safe
+    if(*seq_num == 0)
+        __sync_fetch_and_add(seq_num, 1); // do this to skip rollover packet (where seq_num goes to 0)
+
+    return (__u16)(__u32)(*seq_num);
+}
+
 SEC("tc")
 int egress_mangle_and_tag(struct __sk_buff *skb)
 {
@@ -46,12 +62,6 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
     }
     // Expand packet by 32-bits (4 bytes), add the sequence number and the original
     // frame protocol type and replace the protocol to reserved
-    __u32 key = 0;
-    __u32* seq_num = bpf_map_lookup_elem(&seq_num_map, &key);
-    if (!seq_num) {
-        return TC_ACT_OK;
-    }
-
     if (bpf_skb_adjust_room(skb, 4, BPF_ADJ_ROOM_MAC, 0) < 0) {
         return TC_ACT_OK;
     }
@@ -80,22 +90,6 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
     if (bpf_skb_store_bytes(skb, 0, &header_data, sizeof(header_data), BPF_F_RECOMPUTE_CSUM ) < 0){
         bpf_printk("failed to update frame header");
         return TC_ACT_OK;
-    }
-
-    __sync_fetch_and_add(seq_num, 1); // TODO: not thread safe
-    __u16 counter = (__u16)(__u32)(*seq_num);
-
-    bpf_printk("setting counter: %d %x %x - %d", counter, skb->data, skb->data_end, skb->data_end - skb->data);
-
-    // Write the counter to the new position in the packet
-    if (bpf_skb_store_bytes(skb, sizeof(header_data), &counter, sizeof(counter), 0) < 0) {
-        return TC_ACT_SHOT; // fail otherwise network state will get poisoned
-    }
-
-    // store the frame type with the payload
-    if (bpf_skb_store_bytes(skb, sizeof(header_data) + sizeof(counter), &old_type, sizeof(old_type), 0) < 0) {
-        bpf_printk("failed to add sequence number");
-        return TC_ACT_SHOT; // fail otherwise network state will get poisoned
     }
 
 
