@@ -36,10 +36,27 @@ To deduplicate a packet, we put a sequence number on the ethernet frame prior to
 
 This implies that duplicates that arrive very late will incorrectly be identified as new packets.
 
+## What *should* have happened (aka I promise I didn't over-engineer this)
+
+
+                      traffic marked                             traffic marked
+                         [======]                                  [======]
+    [origin] ----- [bond0] ---- [nicX] ------ internet ------ [nicX] ---- [bond0] ---- [more places]
+                   ^       ^                                              ^
+                   |       |                                              |
+                   |       |                                      packet is untagged and 
+                   |       |                                      duplicates are dropped
+                   |       packet is duplicated
+                   |       via bonding mode=broadcast
+           packet is tagged
+
+In the ideal scenario, there would only be one filter sitting on the bond interface as well as a simple `iptables -j MARK` rule to distinguish traffic between master and slaves, and traffic originating from outside. Depending on the presence or absence of the mark, the packets would either be wrapped with a serial, or unwrapped and deduplicated.
+
+Unfortunately, many limitations along the way prevent it from being this simple (see a Tail (sic) of What-ifs below).
 
 ## Implementation details
 
-There are several extremely important constraints imposed on us by the networking stack:
+There are several important (debilitating) constraints imposed on us by the networking stack:
 
 1. xdp is very powerful but is essentially not at all integrated with the networking stack: in particular, we are not able to mark packets or pass any meta data
 2. if using tc, packets can only be modified at ingress points
