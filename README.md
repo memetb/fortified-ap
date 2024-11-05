@@ -1,4 +1,4 @@
-Fortified AP
+# Fortified AP
 
 The purpose of this project is to create an AP service on linux that generates all necessary configurations to create a Bound VPN which pools two or more connections to a cloud server and allows clients of the AP to transparently connect to the internet.
 
@@ -27,7 +27,7 @@ The principal requirement is for there to be a *no latency* failover from one ne
 
 Quite a bit of effort went into making this work. There are *many* edge conditions/constraints that make it far from trivial to do.
 
-The basic idea is that we can either "figure out" what the duplicate packets are, or we can actively deduplicate them. A choice was made to actively deduplicate them.
+The basic idea is that we can either "figure out" aka "guess" what the duplicate packets are on reception, or we can actively deduplicate them. Figuring out is either a lot of effort or is very naive. A choice was made to actively deduplicate them.
 
 
 ## Deduplication strategy
