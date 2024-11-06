@@ -48,7 +48,7 @@ int ingress_deduplicate(struct __sk_buff *skb)
     // Ensure we have enough room for the Ethernet header + counter
     struct ethhdr *eth = data;
     if ((void *)(eth + 1) + sizeof(header.data.sequence) > data_end) {
-        return TC_ACT_SHOT;  // Drop if packet is too short
+        return TC_ACT_OK;  // Drop if packet is too short
     }
 
     if( eth->h_proto == bpf_htons(ETH_P_ARP)) {
