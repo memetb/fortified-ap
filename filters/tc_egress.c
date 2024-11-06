@@ -115,9 +115,12 @@ char LICENSE[] SEC("license") = "GPL";
 
 /*
  To install:
- tc filter add dev bond0 egress basic action bpf obj egress_tag.o sec tc
+ tc filter add dev bond0 egress basic action bpf obj /usr/share/fortified_ap/tc_egress.o sec tc
 
  uninstall:
  tc filter del dev bond0 egress
 
+ maybe:
+ modprobe cls_basic
+ tc qdisc add dev bond0 clsact
  */
