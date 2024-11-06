@@ -90,11 +90,15 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
 
     // Use bpf_skb_store_bytes to modify the eth_type
     if (bpf_skb_store_bytes(skb, 0, &header_data, sizeof(header_data), BPF_F_RECOMPUTE_CSUM ) < 0){
-        bpf_printk("failed to update frame header");
         return TC_ACT_OK;
     }
 
-    bpf_printk("Tagged packet with serial: %d (type: 0x%x -> 0x%x) (size: %d)", header_data.data.sequence, header_data.data.protocol, header_data.eth.h_proto, skb->len);
+    log("[egress_mangle_and_tag:%d] tagged packet with serial: %d (type: 0x%x -> 0x%x) (size: %d)",
+        skb->ingress_ifindex,
+        header_data.data.sequence & PACKET_SEQUENCE_MASK,
+        header_data.data.protocol,
+        header_data.eth.h_proto,
+        skb->len);
 
     return TC_ACT_OK;
 }

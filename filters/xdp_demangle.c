@@ -53,8 +53,6 @@ int xdp_demangle(struct xdp_md *ctx)
     // restore original header location
     __builtin_memcpy(data + sizeof(__u32), &header.eth, sizeof(header.eth));
 
-    bpf_printk("demangling frame with sequence number %d (protocol: 0x%0X)", header.data.sequence, header.data.protocol);
-
     // truncate the head of the packet
     if (bpf_xdp_adjust_head(ctx, sizeof(header.data)))
         return XDP_ABORTED;

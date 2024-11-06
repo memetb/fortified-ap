@@ -10,3 +10,10 @@ struct custom_header{
         __u16 protocol;
     } data;
 };
+
+
+#ifdef _DEBUG
+#define log(fmt, ...) bpf_printk(fmt, ##__VA_ARGS__)
+#else
+#define log(fmt, ...) do {} while (0)
+#endif

@@ -52,11 +52,10 @@ int ingress_deduplicate(struct __sk_buff *skb)
 
     // get the sequence number
     if (bpf_skb_load_bytes(skb, len - sizeof(header.data.sequence), &header.data.sequence, sizeof(header.data.sequence)) < 0) {
-        bpf_printk("Can't load sequence");
         return TC_ACT_SHOT;
+        log("[ingress_deduplicate:%d] received ARP packet - ignoring", skb->ingress_ifindex);
     }
 
-    bpf_printk("Packet sequence number and protocol are: %d 0x%x", header.data.sequence, eth->h_proto);
 
     // Get current timestamp
     __u64 now = bpf_ktime_get_ns();
@@ -66,7 +65,6 @@ int ingress_deduplicate(struct __sk_buff *skb)
     if (seen){
         // Check if within dedup window
         if (now - *seen < DEDUP_WINDOW_NS) {
-            bpf_printk("Dropped duplicate packet (serial: %d)", header.data.sequence);
             return TC_ACT_SHOT;  // Drop duplicate packet
         }
     }
