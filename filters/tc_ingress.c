@@ -19,15 +19,14 @@
 //
 // ATTACH TO BOND INTERFACE ON INGRESS
 
+
 // Define a hash map to store recent packet hashes
 struct {
 		__uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, 512*1024);
+    __uint(max_entries, 16*1024); // the number of hash entries dictates how far back we're looking
 		__type(key, __u16);		 // sequence
-		__type(value, __u64);	 // timestamp
+		__type(value, __u16);	 // nothing
 } seen_packets SEC(".maps");
-
-#define DEDUP_WINDOW_NS 1500000000  // 1.5s // TODO: MAKE THIS CONFIGURABLE
 
 SEC("tc")
 int ingress_deduplicate(struct __sk_buff *skb)
@@ -57,22 +56,16 @@ int ingress_deduplicate(struct __sk_buff *skb)
     }
 
 
-    // Get current timestamp
-    __u64 now = bpf_ktime_get_ns();
+    __u16 nothing = 0;
+    if (bpf_map_update_elem(&seen_packets, &sequence, &nothing, BPF_NOEXIST) == 0) {
 
-    // Look up in map
-    __u64 *seen = bpf_map_lookup_elem(&seen_packets, &header.data.sequence);
-    if (seen){
-        // Check if within dedup window
-        if (now - *seen < DEDUP_WINDOW_NS) {
-            return TC_ACT_SHOT;  // Drop duplicate packet
-        }
-    }
+        log("[ingress_deduplicate:%d] packet sequence number is %d a DUP",
+            skb->ingress_ifindex, sequence, eth->h_proto);
+        return TC_ACT_SHOT;
 
-    // Not a duplicate, add to map
-    bpf_map_update_elem(&seen_packets, &header.data.sequence, &now, BPF_ANY);
-
-    return TC_ACT_OK;
+    } else {
+        return TC_ACT_OK;
+    };
 }
 
 char LICENSE[] SEC("license") = "GPL";
