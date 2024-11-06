@@ -84,8 +84,6 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
     header_data.data.protocol = header_data.eth.h_proto;
     header_data.eth.h_proto = bpf_htons(ETH_P_802_EX1); // Change EtherType to custom value
 
-    if( header_data.data.sequence == 0)
-        return TC_ACT_SHOT;
 
     // Use bpf_skb_store_bytes to modify the eth_type
     if (bpf_skb_store_bytes(skb, 0, &header_data, sizeof(header_data), BPF_F_RECOMPUTE_CSUM ) < 0){
