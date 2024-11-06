@@ -58,17 +58,21 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
 
     struct custom_header header_data;
     if (bpf_skb_load_bytes(skb, 0, &header_data, sizeof(header_data.eth)) < 0) {
+        log("[egress_mangle_and_tag:%d] can't load ethernet header", skb->ingress_ifindex);
         return TC_ACT_OK; // TODO: make this confiugrable
     }
 
     // do not alter any of the ARP communications - their duplication doesn't matter anyways
     if( header_data.eth.h_proto == bpf_htons(ETH_P_ARP)) {
+        log("[egress_mangle_and_tag:%d] received ARP packet - ignoring", skb->ingress_ifindex);
         return TC_ACT_OK;
     }
 
     // Expand packet by 32-bits (4 bytes), add the sequence number and the original
     // frame protocol type and replace the protocol to reserved
     if (bpf_skb_adjust_room(skb, 4, BPF_ADJ_ROOM_MAC, 0) < 0) {
+        log("[egress_mangle_and_tag:%d] unable to adjust room (err=%d) - size is %d",
+            skb->ingress_ifindex, res, skb->len);
         return TC_ACT_OK;
     }
 
@@ -82,6 +86,7 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
     struct ethhdr *eth = data;
     eth = data;
     if ((void *)(eth + 1) + 4 > data_end) {
+        log("[egress_mangle_and_tag:%d] adjusted packet ethernet header is too short", skb->ingress_ifindex);
         return TC_ACT_SHOT;  // Drop if packet is too short
     }
 
@@ -91,8 +96,9 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
 
 
     // Use bpf_skb_store_bytes to modify the eth_type
-    if (bpf_skb_store_bytes(skb, 0, &header_data, sizeof(header_data), BPF_F_RECOMPUTE_CSUM ) < 0){
-        return TC_ACT_OK;
+    if (bpf_skb_store_bytes(skb, 0, &header_data, sizeof(header_data), BPF_F_RECOMPUTE_CSUM ) < 0) {
+        log("[egress_mangle_and_tag:%d] unable to modify header", skb->ingress_ifindex);
+        return TC_ACT_SHOT;
     }
 
     log("[egress_mangle_and_tag:%d] tagged packet with serial: %d (type: 0x%x -> 0x%x) (size: %d)",
