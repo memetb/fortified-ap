@@ -3,7 +3,7 @@
 #include <linux/pkt_cls.h>
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
-
+#include "common.h"
 //
 //                  --- [tap0] -- [nic0]
 //                 /
@@ -25,16 +25,7 @@
 SEC("tc")
 int mark_all_packets(struct __sk_buff *skb)
 {
-		void *data = (void *)(long)skb->data;
-		void *data_end = (void *)(long)skb->data_end;
-
-    // Ensure we have enough room for the Ethernet header + counter
-    /* struct ethhdr *eth = data; */
-    /* if ((void *)(eth + 1) + 4 > data_end) { */
-    /*     return TC_ACT_OK; */
-    /* } */
-
-    skb->mark = 0xCFAE;
+    skb->mark = mark;
 
     return TC_ACT_OK;
 }
@@ -44,6 +35,8 @@ char _license[] SEC("license") = "GPL";
 
 /*
  To install:
+
+ sudo tc filter add dev tap0 ingress basic action bpf obj /usr/share/fortified_ap/tc_mark.o sec tc
 
  sudo tc filter add dev enp5s0.4 ingress basic action bpf obj mark_all.o sec tc
  sudo tc filter add dev enp5s0.6 ingress basic action bpf obj mark_all.o sec tc
