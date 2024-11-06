@@ -50,8 +50,10 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
 {
     // packet was received from slave - it's already been sequence tagged
     // by the sending end (i.e. other host). Let the ingress filter strip it
-    if (skb->mark == 0xCFAE)
+    if (skb->mark == mark){
+        log("[egress_mangle_and_tag:%d] ignoring %x %x", skb->ingress_ifindex, skb->mark, mark);
         return TC_ACT_OK;
+    }
 
 		// Access packet data
 		void *data = (void *)(long)skb->data;
