@@ -58,9 +58,14 @@ int egress_mangle_and_tag(struct __sk_buff *skb)
 
     struct custom_header header_data;
     if (bpf_skb_load_bytes(skb, 0, &header_data, sizeof(header_data.eth)) < 0) {
-        // load the ethernet header
-        return TC_ACT_SHOT;
+        return TC_ACT_OK; // TODO: make this confiugrable
     }
+
+    // do not alter any of the ARP communications - their duplication doesn't matter anyways
+    if( header_data.eth.h_proto == bpf_htons(ETH_P_ARP)) {
+        return TC_ACT_OK;
+    }
+
     // Expand packet by 32-bits (4 bytes), add the sequence number and the original
     // frame protocol type and replace the protocol to reserved
     if (bpf_skb_adjust_room(skb, 4, BPF_ADJ_ROOM_MAC, 0) < 0) {
