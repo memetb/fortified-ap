@@ -38,11 +38,8 @@ static __always_inline __u16 get_sequence_number()
         return 0;
     }
 
-    __sync_fetch_and_add(seq_num, 1); // TODO: not thread safe
-    if(*seq_num == 0)
-        __sync_fetch_and_add(seq_num, 1); // do this to skip rollover packet (where seq_num goes to 0)
-
-    return (__u16)(__u32)(*seq_num);
+    __sync_fetch_and_add(seq_num, 1);
+    return (__u16)(__u32)(*seq_num) & PACKET_SEQUENCE_MASK;
 }
 
 SEC("tc")
