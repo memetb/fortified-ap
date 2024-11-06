@@ -49,12 +49,15 @@ int ingress_deduplicate(struct __sk_buff *skb)
         return TC_ACT_SHOT;  // Drop if packet is too short
     }
 
-    // get the sequence number
-    if (bpf_skb_load_bytes(skb, len - sizeof(header.data.sequence), &header.data.sequence, sizeof(header.data.sequence)) < 0) {
-        return TC_ACT_SHOT;
+    if( eth->h_proto == bpf_htons(ETH_P_ARP)) {
         log("[ingress_deduplicate:%d] received ARP packet - ignoring", skb->ingress_ifindex);
+        return TC_ACT_OK;
     }
 
+    // get the sequence number from the end of the packet buffer
+    __u16 sequence;
+    if (bpf_skb_load_bytes(skb, len - sizeof(sequence), &sequence, sizeof(sequence)) < 0)
+        return TC_ACT_OK;
 
     __u16 nothing = 0;
     if (bpf_map_update_elem(&seen_packets, &sequence, &nothing, BPF_NOEXIST) == 0) {
