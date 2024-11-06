@@ -14,9 +14,9 @@
 // user -- [bond0] ---- ...
 //                 \
 //                  --- [tapN] -- [nicN]
-//                             ^
-//                             |
-//                       (YOU ARE HERE)
+//                      ^
+//                      |
+//                (YOU ARE HERE)
 //
 // ATTACH TO SLAVE INTERFACE ON INGRESS
 //
