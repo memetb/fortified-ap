@@ -79,6 +79,9 @@ int xdp_demangle(struct xdp_md *ctx)
     if (ctx_store_bytes(ctx, data_end - data - 2, &header.data.sequence, 2, 0) < 0)
         return XDP_ABORTED;
 
+    log("[xdp_demangle:%d] demangled frame with sequence number %d (protocol: 0x%0X)",
+        ctx->ingress_ifindex, header.data.sequence, header.data.protocol);
+
     return XDP_PASS;
 }
 
@@ -86,7 +89,7 @@ char _license[] SEC("license") = "GPL";
 
 /*
   install:
-  sudo ip link set dev enp5s0.4 xdp obj ingress_xdp.o sec xdp
+  sudo ip link set dev tap0 xdp obj /usr/share/fortified_ap/xdp_demangle.o sec xdp
   sudo ip link set dev enp5s0.6 xdp obj ingress_xdp.o sec xdp
 
   uninstall:
