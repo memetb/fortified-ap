@@ -37,6 +37,8 @@ int ingress_deduplicate(struct __sk_buff *skb)
         return TC_ACT_OK;
     }
 
+    skb->mark = 0;
+
 		// Access packet data
 		void *data = (void *)(long)skb->data;
 		void *data_end = (void *)(long)skb->data_end;
