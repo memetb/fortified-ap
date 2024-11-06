@@ -1,6 +1,7 @@
 #include <linux/if_ether.h>
 
 
+const __u16 PACKET_SEQUENCE_MASK=0xFFFF;
 const __u16 mark = 0xCFAE;
 
 struct custom_header{
