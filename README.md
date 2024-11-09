@@ -21,7 +21,7 @@ The principal requirement is for there to be a *no latency* failover from one ne
 5. systemd service
 6. a minimalist web service on http://network that gives current status
 
-
+See [NETWORKING.md](./NETWORKING.md) for details on layer 3 setup.
 
 # Packet deduplication magic
 
