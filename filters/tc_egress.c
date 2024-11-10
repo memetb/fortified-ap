@@ -43,7 +43,7 @@ static __always_inline __u16 get_sequence_number()
 }
 
 SEC("tc")
-int egress_mangle_and_tag(struct __sk_buff *skb)
+int egress_tag(struct __sk_buff *skb)
 {
     // packet was received from slave - it's already been sequence tagged
     // by the sending end (i.e. other host). Let the ingress filter strip it
