@@ -62,13 +62,16 @@ int ingress_deduplicate(struct __sk_buff *skb)
         return TC_ACT_OK;
 
     __u16 nothing = 0;
-    if (bpf_map_update_elem(&seen_packets, &sequence, &nothing, BPF_NOEXIST) == 0) {
+    if (!!bpf_map_update_elem(&seen_packets, &sequence, &nothing, BPF_NOEXIST)) {
 
-        log("[ingress_deduplicate:%d] packet sequence number is %d a DUP",
+        log("[ingress_deduplicate:%d] packet sequence number is %d a duplicate",
             skb->ingress_ifindex, sequence, eth->h_proto);
         return TC_ACT_SHOT;
 
     } else {
+
+        log("[ingress_deduplicate:%d] first time seeing packet with sequence number %d",
+            skb->ingress_ifindex, sequence);
         return TC_ACT_OK;
     };
 }
