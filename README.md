@@ -1,27 +1,38 @@
-# Fortified AP
+# Fortified AP [WIP]
 
-The purpose of this project is to create an AP service on linux that generates all necessary configurations to create a Bound VPN which pools two or more connections to a cloud server and allows clients of the AP to transparently connect to the internet.
+This is a work-in-progress, dogfood-as-you-go project which I am currently using for professional purposes.
 
-The principal requirement is for there to be a *no latency* failover from one network connection to another for the purposes of reliable real-time video conferencing where drop-out and freeze frames are not acceptable.
+The goal of this project is to create an AP service on linux embedded device that creates redundant VPN tunnels to a VPS instance with the specific requirement of 0-latency failover, in effect a RAID1 of network tunnels.
+
+When complete, this project should have a minimal friction installer package which can be run on an local router/device and on the VPS server, possibly even spinning up the VPS resource as necessary given a cloud service provider API key.
+
+The requirement for a *no latency* failover is to allow for reliable real-time video conferencing at the cost of redundant ISP connections.
 
 
-      [Client0]  -----------\                       /---- VPN1 - NIC1 (e.g. eth0)----\
-                            |                      /                                 |
-      [Client1]  -----------+-- [ Access-Point ]  |------ VPN2 - NIC2 (e.g. wan0) ---+--> [Server]
-                            |                      \                                 |
-      [Client2]  -----------/                       \____ VPNX - NICX (e.g. pigeon)--/
-
+      [Client0]  -----------\                       /---- VPN1 over NIC1 (e.g. eth0)----\
+                            |                      /                                    |
+      [Client1]  -----------+-- [ Access-Point ]  |------ VPN2 over NIC2 (e.g. wan0) ---+--> [Server]
+                            |        ^             \                                    |        ^
+      [Client2]  -----------/        |              \____ VPNX over NICX (e.g. pigeon)--/        |
+                                     |                                ^                          |
+                                     |                                |                          |
+                                 user traffic              fully duplicated traffic         user traffic
 
 # Components #
 
-1. hostapd configuration (including connection and disconnection event monitoring for hooks)
-2. ovpn client configurations
-3. ovpn server configuration
-4. VPS state (IaC and provisioning)
-5. systemd service
-6. a minimalist web service on http://network that gives current status
+1. network stack dissectors to allow for tunnelling  **[completed]**
+2. hostapd configuration (including connection and disconnection event monitoring for hooks) **[partially completed]**
+3. ovpn client configurations **[partially completed]**
+4. ovpn server configuration **[partially completed]**
+5. VPS state (IaC and provisioning)
+6. systemd service **[partially completed]**
+7. a minimalist web service on http://network that gives current status
 
 See [NETWORKING.md](./NETWORKING.md) for details on layer 3 setup.
+
+# Packet duplication
+
+Traffic duplication is trivially achieved by creating a `bond` interface using the stock linux kernel module `bonding`. Setting the `bond` interface's mode to `broadcast` duplicates the traffic on the slave links automatically. Creating multiple openvpn `tap` layer 2 interfaces and then bonding them to the `bond0` achieves the first half of the requirement.
 
 # Packet deduplication magic
 
@@ -36,8 +47,12 @@ To deduplicate a packet, we put a sequence number on the ethernet frame prior to
 
 This implies that duplicates that arrive very late will incorrectly be identified as new packets.
 
-## What *should* have happened (aka I promise I didn't over-engineer this)
+## What *should* have happened (aka I promise I didn't over-engineer this... maybe only a little)
 
+For starters, while the `bonding` module provides the ability to duplicate traffic, there appears to exist no such stock functionality for deduplicating traffic.
+
+
+Failing that, the following is the approach to solving the problem:
 
                       traffic marked                             traffic marked
                          [======]                                  [======]
@@ -59,10 +74,10 @@ Unfortunately, many limitations along the way prevent it from being this simple 
 There are several important (debilitating) constraints imposed on us by the networking stack:
 
 1. `xdp` is very powerful but is essentially not at all integrated with the networking stack: in particular, we are not able to mark packets or pass any meta data
-2. furthermore, `xdp` cannot be attached to virtual interfaces (of which bond is one)
+2. furthermore, `xdp` cannot be attached to virtual interfaces (of which `bond` is one)
 3. and finally, attaching XDP filters to each slave interface would require that they now share their state across all nics
 4. if using `tc`, packets can only be modified at ingress points (egress modification is not possible by design)
-5. resizing of packets using `tc` isn't straightforward: it is easy to grow a packet but isn't always possible to shrink it. This makes encapsulation+decapsulation challenging
+5. resizing of packets using `tc` isn't straightforward: it is easy to grow(!) a packet but isn't always (?) possible to shrink it(!!). This makes encapsulation+decapsulation challenging
 6. finally, a packet going from a bond slave to master does not appear as a normal packet and thus, there is no ingress event from when it goes from slave to master. This means that the bonded interface sees exactly what the slave interface saw.
 
 ### End to end data flow pictogram (data is flowing from left to right)
@@ -78,11 +93,11 @@ There are several important (debilitating) constraints imposed on us by the netw
           (a) packet is tagged
 
                      
-(a) at departure, we simply grow the packet head and add a sequence number + a protocol number (c.f. "But why" 1,2)
+(a) at departure, we simply grow the packet head and tag the packet with a sequence number + a protocol number (c.f. "But why" 1,2)
 
 (b) on reception on the slave interface on the remote host, we immediately want to reconvert the packet back to its original protocl, strip the sequence + protocol data from the head (c.f. 3) and let the subsequent steps deal with the deduplication by *appending* the sequence number to the end of the packet
 
-(c) mark the packet using tc (c.f. 4, 5)
+(c) mark the packet using `tc` (c.f. 4, 5) (this is equivalent to `iptables -j MARK`)
 
 (d) on ingress of *marked* packets only (c.f. 6) to bond master, do deduplication lookup by popping the sequence number from the last 2 bytes of the frame.
 
@@ -147,10 +162,12 @@ A: silly rabbit, that'd be too easy. The answer is you can't.
 A: if we apply the deduplication strategy to packets coming from the outside to the bond, we will end up just taking some random last byte number in the packet and assuming it's a sequence number.
 
 Bonus why: why are you doing all of this? Can you not capture the sequence number on ingress (at b) and make it into a meta data?
-A: evidently you can't. But you know what, I just learned TAP interfaces don't support XDP so we're fucked.
+A: evidently you can't. But you know what, I just learned TAP interfaces don't support XDP ~~so we're f*@$ed~~. It appears to be working so far.
 
 
 
+
+Below this line are uncurated Q/A pairs.
 
 --------------------
 
